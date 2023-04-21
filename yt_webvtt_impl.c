@@ -234,7 +234,7 @@ static Webvtt_error read_webvtt(
 	Buf *mem,
 	char **clean_text_output,
 	size_t *clean_text_output_len,
-	Webvtt_timestap **timestaps_output
+	Webvtt_timestap **timestaps_output,
 	size_t *timestaps_output_len) {
 
 	/* We over-allocate space to put the cleaned text. We cannot have more clean
@@ -255,6 +255,7 @@ static Webvtt_error read_webvtt(
 	size_t timestaps_index = 0;
 	Webvtt_timestap *timestaps = Buf_bump(mem, sizeof *timestaps * timestaps_len);
 	if (timestaps == NULL) {
+		Buf_free(mem);
 		return WEBVTT_NO_MEM;
 	}
 
@@ -273,6 +274,7 @@ static Webvtt_error read_webvtt(
 	}
 
 	if (!Str_starts_with(data, webvtt_magic)) {
+		Buf_free(mem);
 		return WEBVTT_BAD_MAGIC;
 	}
 
@@ -280,6 +282,7 @@ static Webvtt_error read_webvtt(
 
 	ssize_t block_end = Str_find_str(s, webvtt_end_marker);
 	if (block_end == -1) {
+		Buf_free(mem);
 		return WEBVTT_BAD_BLOCK;
 	}
 
@@ -292,6 +295,7 @@ static Webvtt_error read_webvtt(
 		if (Str_starts_with(s, S("NOTE")) || Str_starts_with(s, S("STYLE"))) {
 			block_end = Str_find_str(s, webvtt_end_marker);
 			if (block_end == -1) {
+				Buf_free(mem);
 				return WEBVTT_BAD_BLOCK;
 			}
 			goto find_next_block;
@@ -307,19 +311,23 @@ static Webvtt_error read_webvtt(
 				 */
 				ssize_t timing_start = Str_find_str(s, S("\n"));
 				if (timing_start == -1) {
+					Buf_free(mem);
 					return WEBVTT_BAD_TIMING;
 				}
 				s = Str_slice_front(s, timing_start+1);
 				if (Str_starts_with(s, S("0"))) {
+					Buf_free(mem);
 					return WEBVTT_BAD_TIMING;
 				}
 			}
 
 			ssize_t timing_line_end = Str_find_str(s, S("\n"));
 			if (timing_line_end == -1) {
+				Buf_free(mem);
 				return WEBVTT_BAD_TIMING;
 			}
 			if (timing_line_end < webvtt_timing_format.len) {
+				Buf_free(mem);
 				return WEBVTT_BAD_TIMING;
 			}
 
@@ -327,6 +335,7 @@ static Webvtt_error read_webvtt(
 
 			ssize_t testamp_separator = Str_find_str(timing, webvtt_timestamp_separator);
 			if (testamp_separator == -1) {
+				Buf_free(mem);
 				return WEBVTT_BAD_TIMING;
 			}
 
@@ -336,10 +345,12 @@ static Webvtt_error read_webvtt(
 
 			long start_timestamp_ms = webvtt_timestamp_to_ms(start_timestamp);
 			if (start_timestamp_ms == -1) {
+				Buf_free(mem);
 				return WEBVTT_BAD_TIMESTAMP;
 			}
 			long end_timestamp_ms = webvtt_timestamp_to_ms(end_timestamp);
 			if (end_timestamp_ms == -1) {
+				Buf_free(mem);
 				return WEBVTT_BAD_TIMESTAMP;
 			}
 
@@ -350,6 +361,7 @@ static Webvtt_error read_webvtt(
 		{
 			block_end = Str_find_str(s, webvtt_end_marker);
 			if (block_end == -1) {
+				Buf_free(mem);
 				return WEBVTT_BAD_PAYLOAD;
 			}
 			Str payload = Str_slice(s, 0, block_end);
@@ -359,6 +371,7 @@ static Webvtt_error read_webvtt(
 			size_t tmp_clean_text_index = 0;
 			char *tmp_clean_text = Buf_bump(&text_mem, sizeof (char) * payload.len);
 			if (tmp_clean_text == NULL) {
+				Buf_free(mem);
 				return WEBVTT_NO_MEM;
 			}
 
@@ -376,6 +389,7 @@ static Webvtt_error read_webvtt(
 				c = (c != '\n') ? c : ' ';
 				if (c == '<') {
 					if (in_tag) {
+						Buf_free(mem);
 						return WEBVTT_BAD_PAYLOAD;
 					}
 					in_tag = true;
@@ -383,6 +397,7 @@ static Webvtt_error read_webvtt(
 					continue;
 				} else if (c == '>') {
 					if (!in_tag) {
+						Buf_free(mem);
 						return WEBVTT_BAD_PAYLOAD;
 					}
 					in_tag = false;
@@ -395,12 +410,14 @@ static Webvtt_error read_webvtt(
 					if (c == '0' && payload.chars[i-1] == '<') {
 						size_t remaining_length = payload.len - i;
 						if (remaining_length <= webvtt_timestamp_format.len) {
+							Buf_free(mem);
 							return WEBVTT_BAD_TIMESTAMP;
 						}
 						Str timestamp = Str_slice(payload, i,
 							i + webvtt_timestamp_format.len);
 						long timestamp_ms = webvtt_timestamp_to_ms(timestamp);
 						if (timestamp_ms == -1) {
+							Buf_free(mem);
 							return WEBVTT_BAD_TIMESTAMP;
 						}
 						timestaps_no++;
@@ -486,21 +503,12 @@ static Webvtt_error read_webvtt(
 		}
 
 find_next_block:
+		/* We have reached the end of the data (s) and it was well formed. */
 		if (block_end + webvtt_end_marker.len == s.len) {
-			/*
-			size_t j = 0;
-			for (size_t i = 0; i < clean_text_index; i++) {
-				if (timestaps[j].pos == i)
-					printf("<%d>", (int) timestaps[j].time_ms), j++;
-				putchar(clean_text[i]);
-			}
-			*/
-			printf("text = \"%.*s\"\n", (int) clean_text_index, clean_text);
-			printf("times = [");
-			for (size_t i = 0; i < timestaps_index; i++) {
-				printf("(%zu, %lu), ", timestaps[i].pos, timestaps[i].time_ms);
-			}
-			printf("]\n");
+			*clean_text_output = clean_text;
+			*clean_text_output_len = clean_text_index;
+			*timestaps_output = timestaps;
+			*timestaps_output_len = timestaps_index;
 			return WEBVTT_OK;
 		}
 		s = Str_slice_front(s, block_end + webvtt_end_marker.len);
@@ -535,7 +543,7 @@ find_next_block:
 		}
 
 		void *memory = NULL;
-		size_t gibibyte = 1 << 30;
+		size_t gibibyte = 1L << 30;
 		{
 			int fd = -1;
 			off_t offset = 0;

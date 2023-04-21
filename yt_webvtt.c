@@ -11,7 +11,6 @@
 
 static PyObject *cReadWebVTT(PyObject *self, PyObject *args)
 {
-	PyObject *input_str_obj = NULL;
 	const char *input_str = NULL;
 	Py_ssize_t intput_str_len = 0;
 
@@ -21,32 +20,34 @@ static PyObject *cReadWebVTT(PyObject *self, PyObject *args)
 	void *scratch_memory = NULL;
 	int set_item_res = 0;
 
-	if (!PyArg_ParseTuple(args, "U", &input_str_obj)) {
-		goto error;
-	}
-	if ((input_str = PyUnicode_AsUTF8AndSize(input_str_obj, &intput_str_len)) == NULL) {
+	if (PyArg_ParseTuple(args, "s#", &input_str, &intput_str_len) == NULL) {
 		goto error;
 	}
 
-	scratch_memory = calloc(intput_str_len, sizeof (char));
-	if (scratch_memory == NULL) {
-		// NOTE: Is this really needed since we are not using a python "branded"
-		// allocator?
-		PyErr_NoMemory();
-		goto error;
-	}
-	// Assuming that this is the result.
-	char clean_str[5] = "Hello";
-	size_t clean_str_len = 5;
-	unsigned int pos_and_time[10] = {
-		0, 1,
-		1, 2,
-		2, 3,
-		3, 4,
-		4, 5
-	};
+	char *clean_str = NULL;
+	size_t clean_str_len = 0;
+	Webvtt_timestap *pos_and_time = NULL;
+	size_t pos_and_time_len = 0;
+	{
+		long gibibyte = 1L << 30;
+		scratch_memory = calloc(gibibyte, sizeof (char));
+		if (scratch_memory == NULL) {
+			// NOTE: Is this really needed since we are not using a python
+			// "branded" allocator?
+			// PyErr_NoMemory();
+			goto error;
+		}
+		Str file = {.chars = input_str, .len = intput_str_len};
+		Buf arena_allocator = {.mem = scratch_memory, .size = gibibyte, .used = 0};
 
-	free(scratch_memory), scratch_memory = NULL;
+		Webvtt_error res = read_webvtt(
+			file, &arena_allocator,
+			&clean_str, &clean_str_len,
+			&pos_and_time, &pos_and_time_len);
+		if (res != WEBVTT_OK) {
+			goto error;
+		}
+	}
 
 	res_obj = PyTuple_New(2);
 	if (res_obj == NULL) {
@@ -60,29 +61,36 @@ static PyObject *cReadWebVTT(PyObject *self, PyObject *args)
 	set_item_res = PyTuple_SetItem(res_obj, 0, clean_str_obj);
 	assert(set_item_res != -1);
 
-	pos_and_time_obj = PyList_New(10);
+	pos_and_time_obj = PyList_New(pos_and_time_len*2);
 	if (pos_and_time_obj == NULL) {
 		goto error;
 	}
 	set_item_res = PyTuple_SetItem(res_obj, 1, pos_and_time_obj);
 	assert(set_item_res != -1);
 
-	for (int i = 0; i < 10; i++) {
-		PyObject *num = PyLong_FromUnsignedLong(pos_and_time[i]);
-		if (num == NULL) {
+	for (size_t i = 0; i < pos_and_time_len; i++) {
+		PyObject *pos = PyLong_FromSize_t(pos_and_time[i].pos);
+		if (pos == NULL) {
 			goto error;
 		}
-		set_item_res = PyList_SetItem(pos_and_time_obj, i, num);
+		PyObject *time = PyLong_FromUnsignedLong(pos_and_time[i].time_ms);
+		if (time == NULL) {
+			goto error;
+		}
+		set_item_res = PyList_SetItem(pos_and_time_obj, i*2, pos);
+		assert(set_item_res != -1);
+		set_item_res = PyList_SetItem(pos_and_time_obj, i*2+1, time);
 		assert(set_item_res != -1);
 	}
 
+	free(scratch_memory);
 	return res_obj;
 error:
 	free(scratch_memory);
 	Py_DecRef(res_obj);
 	Py_DecRef(clean_str_obj);
 	Py_DecRef(pos_and_time_obj);
-	return NULL;
+	Py_RETURN_NONE;
 }
 
 /* https://docs.python.org/3/c-api/structures.html#c.PyMethodDef */

@@ -1,4 +1,8 @@
 import yt_webvtt
 
-clean_text, pos_and_time = yt_webvtt.read_webvtt("test")
-print(clean_text, pos_and_time)
+text = open('FOMC press conference, November 3, 2021.en.vtt').read()
+res = yt_webvtt.read_webvtt(text)
+print(res)
+
+error = yt_webvtt.read_webvtt("")
+print(error)
