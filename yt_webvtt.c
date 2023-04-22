@@ -9,6 +9,22 @@
 
 #include "yt_webvtt_impl.c"
 
+/* A WebVTT file is made out of blocks, the first block bust be an header,
+ * than all the other ones are optional, each block is separated by a blank
+ * line (\\n\\n).
+ *
+ *   * header
+ *   * style (contains CSS)
+ *   * note (comments)
+ *   * cue
+ *     - identifier
+ *     - timing
+ *     - payload (where the actual subtitles are)
+ *
+ * We only care about the timing and the payload of the cue blocks.
+ * https://developer.mozilla.org/en-US/docs/Web/API/WebVTT_API
+ * https://www.w3.org/TR/webvtt1
+ */
 static PyObject *cReadWebVTT(PyObject *self, PyObject *args)
 {
 	const char *input_str = NULL;
