@@ -3,4 +3,11 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "Youtube WebVTT"
+name = "yt_webvtt"
+version = "1.0.0"
+description = "A parser and cleaner of automatically generated YouTube subtitles."
+authors = [{name="Diego Bellani", email = "bellanidiego@gmail.com"}]
+dependencies = []
+
+# https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
+# https://toml.io/
