@@ -1,8 +1,3 @@
-/* rm -rf PackageName.egg-info build dist
- * pip install .
- * python setup.py build && python setup.py install
- */
-
 #define PY_SSIZE_T_CLEAN
 #define Py_LIMITED_API 0x030A0000 /* 3.10 */
 #include <Python.h>
