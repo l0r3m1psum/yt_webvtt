@@ -140,7 +140,7 @@ static void *Buf_bump(Buf *alloc, size_t req_size) {
 	if (alloc->size - alloc->used < req_size) {
 		return NULL;
 	}
-	void *res = alloc->mem + alloc->used;
+	void *res = (unsigned char *)alloc->mem + alloc->used;
 	alloc->used += req_size;
 	return res;
 }
