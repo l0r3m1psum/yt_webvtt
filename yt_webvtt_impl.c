@@ -20,11 +20,17 @@ typedef struct {
 	size_t len;
 } Str;
 
-#define S(string_litteral) \
-	((Str) { \
+/* Needed for strict compliance with C99
+ * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105510#c4
+ * and being able to compile with MSVC.
+ */
+#define S_(string_litteral) \
+	{ \
 		.chars = (string_litteral), \
 		.len = sizeof(string_litteral) - 1, \
-	})
+	}
+#define S(string_litteral) \
+	((Str) S_(string_litteral))
 
 /* Macros for printf. */
 #define STR_FMT "%.*s"
@@ -153,11 +159,11 @@ static void Buf_free(Buf *alloc) {
 
 /* WebVTT reading */
 
-const Str webvtt_magic            = S("WEBVTT");
-const Str webvtt_end_marker       = S("\n\n");
-const Str webvtt_timing_format    = S("00:00:00.000 --> 00:00:00.000");
-const Str webvtt_timestamp_separator = S(" --> ");
-const Str webvtt_timestamp_format = S("00:00:00.000");
+const Str webvtt_magic            = S_("WEBVTT");
+const Str webvtt_end_marker       = S_("\n\n");
+const Str webvtt_timing_format    = S_("00:00:00.000 --> 00:00:00.000");
+const Str webvtt_timestamp_separator = S_(" --> ");
+const Str webvtt_timestamp_format = S_("00:00:00.000");
 const long webvtt_timestamp_radixes[] = {3600000, 60000, 1000, 1};
 
 typedef enum {
